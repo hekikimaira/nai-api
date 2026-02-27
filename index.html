@@ -141,7 +141,7 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Reference — 1 shot</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot — v3</div>
     </div>
     <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
   </div>
@@ -491,7 +491,12 @@ async function generate() {
       parameters: params,
     };
     
-    setLog(`Sending ${action} request...`);
+    // Debug: log body without image data
+    const debugBody = JSON.parse(JSON.stringify(body));
+    if (debugBody.parameters.image) debugBody.parameters.image = '(base64...)';
+    if (debugBody.parameters.reference_image_multiple?.length) debugBody.parameters.reference_image_multiple = ['(base64...)'];
+    console.log('NAI Request:', JSON.stringify(debugBody, null, 2));
+    setLog(`Sending ${action} request... (check console for payload)`);
     
     const resp = await fetch('https://image.novelai.net/ai/generate-image', {
       method: 'POST',
