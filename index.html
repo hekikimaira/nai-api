@@ -422,6 +422,9 @@ async function generate() {
     const seedVal = parseInt(document.getElementById('seed').value) || 0;
     const useSeed = seedVal === 0 ? Math.floor(Math.random() * 4294967295) : seedVal;
     
+    const inputPrompt = prompt || '1girl';
+    const negText = document.getElementById('negPrompt').value || 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry';
+    
     const params = {
       width: w, height: h,
       scale: parseFloat(document.getElementById('guidance').value),
@@ -432,13 +435,37 @@ async function generate() {
       ucPreset: 0,
       qualityToggle: document.getElementById('qualityToggle').checked,
       dynamic_thresholding: false,
-      sm: false, sm_dyn: false,
       noise_schedule: 'native',
-      legacy: false, legacy_v3_extend: false,
+      legacy: false,
+      legacy_v3_extend: false,
       skip_cfg_above_sigma: null,
       variety_boost: document.getElementById('varietyBoost').checked,
       params_version: 3,
-      negative_prompt: document.getElementById('negPrompt').value || 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
+      negative_prompt: negText,
+      characterPrompts: [],
+      use_coords: false,
+      v4_prompt: {
+        caption: {
+          base_caption: inputPrompt,
+          char_captions: [],
+        },
+        use_coords: false,
+        use_order: true,
+      },
+      v4_negative_prompt: {
+        caption: {
+          base_caption: negText,
+          char_captions: [],
+        },
+        use_coords: false,
+        use_order: true,
+      },
+      reference_image_multiple: [],
+      reference_information_extracted_multiple: [],
+      reference_strength_multiple: [],
+      prefer_brownian: true,
+      deliberate_euler_ancestral_bug: false,
+      controlnet_strength: 1,
     };
     
     if (i2iFile) {
@@ -458,7 +485,7 @@ async function generate() {
     }
     
     const body = {
-      input: prompt || '1girl',
+      input: inputPrompt,
       model: document.getElementById('model').value,
       action: action,
       parameters: params,
