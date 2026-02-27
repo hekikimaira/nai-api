@@ -141,7 +141,7 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Reference — 1 shot — v3</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot — v4</div>
     </div>
     <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
   </div>
@@ -245,6 +245,13 @@
   </div>
 
   <div id="errorBox" class="error-box" style="display:none;"></div>
+  <div id="debugSection" style="display:none; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <span style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;">Debug Log</span>
+      <button onclick="copyDebug()" style="background:#334155; border:none; border-radius:6px; padding:6px 12px; color:#6ee7b7; cursor:pointer; font-size:11px; font-weight:600;">Copy</button>
+    </div>
+    <pre id="debugLog" style="background:#0c1524; border:1px solid #1e293b; border-radius:8px; padding:10px; font-size:10px; color:#94a3b8; overflow-x:auto; white-space:pre-wrap; word-break:break-all; max-height:300px; overflow-y:auto;"></pre>
+  </div>
   <div id="logLine" class="log-line" style="display:none;"></div>
 
   <!-- Result -->
@@ -400,6 +407,33 @@ function setError(msg) {
   const el = document.getElementById('errorBox');
   el.style.display = msg ? 'block' : 'none';
   el.textContent = msg;
+  // Also append error to debug log
+  if (msg) {
+    const dl = document.getElementById('debugLog');
+    if (dl) dl.textContent += '\n\n--- ERROR ---\n' + msg;
+  }
+}
+
+function copyDebug() {
+  const text = document.getElementById('debugLog').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  }).catch(() => {
+    // Fallback for older Safari
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
 }
 
 // --- Generate ---
@@ -493,10 +527,14 @@ async function generate() {
     
     // Debug: log body without image data
     const debugBody = JSON.parse(JSON.stringify(body));
-    if (debugBody.parameters.image) debugBody.parameters.image = '(base64...)';
-    if (debugBody.parameters.reference_image_multiple?.length) debugBody.parameters.reference_image_multiple = ['(base64...)'];
-    console.log('NAI Request:', JSON.stringify(debugBody, null, 2));
-    setLog(`Sending ${action} request... (check console for payload)`);
+    if (debugBody.parameters.image) debugBody.parameters.image = '(base64 ' + body.parameters.image.length + ' chars)';
+    if (debugBody.parameters.reference_image_multiple?.length) {
+      debugBody.parameters.reference_image_multiple = body.parameters.reference_image_multiple.map(x => '(base64 ' + x.length + ' chars)');
+    }
+    const debugText = JSON.stringify(debugBody, null, 2);
+    document.getElementById('debugLog').textContent = debugText;
+    document.getElementById('debugSection').style.display = 'block';
+    setLog(`Sending ${action} request...`);
     
     const resp = await fetch('https://image.novelai.net/ai/generate-image', {
       method: 'POST',
