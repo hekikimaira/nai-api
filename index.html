@@ -141,7 +141,7 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Reference — 1 shot — v8</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot — v9</div>
     </div>
     <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
   </div>
@@ -270,12 +270,13 @@
     <div class="section-label">使い方</div>
     <div class="guide-text">
       <strong>左: img2img</strong> → ポーズ人形/構図参考（空間制御）<br>
-      <strong>右: 精密参照</strong> → キャラ画像（外見制御）<br>
+      <strong>右: 精密参照</strong> → director_reference_* パラメータ使用<br>
+      <strong>右: ポーション</strong> → encode-vibe → reference_image_multiple<br>
       <strong>Prompt</strong> → シーン・衣装の補足<br><br>
       <span class="dim">
-        Strength低め(0.5-0.7)でポーズ保持。高めで自由度UP。<br>
-        Ref Fidelity高いほどキャラ細部まで再現。<br>
-        両方同時に1リクエストで送信。公式UIではできない。
+        精密参照: 画像は1024x1536にリサイズ。Character=キャラ保持、Style=画風転写。<br>
+        ポーション: encode-vibe APIでエンコード後に生成。旧Vibe Transfer。<br>
+        img2img Strength低め(0.5-0.7)でポーズ保持。両方同時に1リクエスト送信。
       </span>
     </div>
   </div>
@@ -341,25 +342,61 @@ function showRefControls(show) {
   el.style.display = show ? 'block' : 'none';
   if (show && !el.innerHTML) {
     el.innerHTML = `
-      <div style="margin-bottom:8px;">
-        <div class="field-label">Type</div>
-        <div style="margin-top:8px;">
-          <label style="font-size:12px;color:#94a3b8;">Info Extracted: <span id="infoExtVal">1.0</span></label>
-          <input type="range" id="infoExtracted" min="0.01" max="1" step="0.01" value="1" style="width:100%;" oninput="document.getElementById('infoExtVal').textContent=this.value">
+      <div style="margin-bottom:10px;">
+        <div class="field-label">Mode</div>
+        <div class="ref-type-btns" id="refModeBtns">
+          <div class="ref-type-btn active" onclick="setRefMode('precise')">精密参照</div>
+          <div class="ref-type-btn" onclick="setRefMode('vibe')">ポーション</div>
         </div>
       </div>
-      <div class="slider-wrap">
-        <div class="slider-header"><span>Strength</span><span class="slider-val" id="refStrVal">0.60</span></div>
-        <input type="range" id="refStrength" min="0.01" max="1" step="0.01" value="0.60" oninput="document.getElementById('refStrVal').textContent=parseFloat(this.value).toFixed(2)">
+      <div id="preciseControls">
+        <div style="margin-bottom:10px;">
+          <div class="field-label">Type</div>
+          <div class="ref-type-btns" id="refTypeBtns">
+            <div class="ref-type-btn active" data-type="character" onclick="setRefType(this,'character')">Character</div>
+            <div class="ref-type-btn" data-type="style" onclick="setRefType(this,'style')">Style</div>
+            <div class="ref-type-btn" data-type="character&style" onclick="setRefType(this,'character&style')">Char+Style</div>
+          </div>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-header"><span>Strength</span><span class="slider-val" id="refStrVal">0.60</span></div>
+          <input type="range" id="refStrength" min="0.01" max="1" step="0.01" value="0.60" oninput="document.getElementById('refStrVal').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-header"><span>Fidelity</span><span class="slider-val" id="refFidVal">0.50</span></div>
+          <input type="range" id="refFidelity" min="0" max="1" step="0.01" value="0.50" oninput="document.getElementById('refFidVal').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
       </div>
-      <div class="slider-wrap">
-        <div class="slider-header"><span>Fidelity</span><span class="slider-val" id="refFidVal">0.50</span></div>
-        <input type="range" id="refFidelity" min="0" max="1" step="0.01" value="0.50" oninput="document.getElementById('refFidVal').textContent=parseFloat(this.value).toFixed(2)">
+      <div id="vibeControls" style="display:none;">
+        <div class="slider-wrap">
+          <div class="slider-header"><span>Info Extracted</span><span class="slider-val" id="vibeInfoVal">0.70</span></div>
+          <input type="range" id="vibeInfoExtracted" min="0.01" max="1" step="0.01" value="0.70" oninput="document.getElementById('vibeInfoVal').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-header"><span>Strength</span><span class="slider-val" id="vibeStrVal">0.60</span></div>
+          <input type="range" id="vibeStrength" min="0.01" max="1" step="0.01" value="0.60" oninput="document.getElementById('vibeStrVal').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
+        <div style="font-size:10px;color:#64748b;margin-top:4px;">encode-vibe API経由でエンコード後に生成</div>
       </div>`;
   }
 }
 
-// Ref type removed - using info extracted slider instead
+let currentRefMode = 'precise';
+let currentRefType = 'character';
+
+function setRefMode(mode) {
+  currentRefMode = mode;
+  document.querySelectorAll('#refModeBtns .ref-type-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('preciseControls').style.display = mode === 'precise' ? 'block' : 'none';
+  document.getElementById('vibeControls').style.display = mode === 'vibe' ? 'block' : 'none';
+}
+
+function setRefType(el, type) {
+  currentRefType = type;
+  document.querySelectorAll('#refTypeBtns .ref-type-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
 
 // --- Drag & Drop ---
 ['i2iZone','refZone'].forEach(id => {
@@ -430,6 +467,59 @@ function copyDebug() {
   });
 }
 
+// --- crop and resize for Precise Reference (1024x1536) ---
+async function cropAndResize(base64Img, targetW = 1024, targetH = 1536) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      // Black background
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, targetW, targetH);
+      // Aspect-fit
+      const scale = Math.min(targetW / img.width, targetH / img.height);
+      const sw = img.width * scale;
+      const sh = img.height * scale;
+      const sx = (targetW - sw) / 2;
+      const sy = (targetH - sh) / 2;
+      ctx.drawImage(img, sx, sy, sw, sh);
+      // Return base64 without data URI prefix
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.src = 'data:image/png;base64,' + base64Img;
+  });
+}
+
+// --- encode-vibe for Potion/Vibe Transfer ---
+async function encodeVibe(token, base64Img, infoExtracted, model) {
+  const resp = await fetch('https://image.novelai.net/ai/encode-vibe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      image: base64Img,
+      information_extracted: infoExtracted,
+      model: model,
+    }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`encode-vibe ${resp.status}: ${errText}`);
+  }
+  // Response is binary, convert to base64
+  const buf = await resp.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 // --- Generate ---
 async function generate() {
   const token = document.getElementById('token').value.trim();
@@ -496,11 +586,13 @@ async function generate() {
       reference_image_multiple: [],
       reference_information_extracted_multiple: [],
       reference_strength_multiple: [],
+      normalize_reference_strength_multiple: false,
       prefer_brownian: true,
       deliberate_euler_ancestral_bug: false,
       controlnet_strength: 1,
     };
     
+    // img2img source
     if (i2iFile) {
       params.image = await fileToBase64(i2iFile);
       params.strength = parseFloat(document.getElementById('strength')?.value || 0.6);
@@ -509,12 +601,43 @@ async function generate() {
       setLog('Encoded img2img source...');
     }
     
+    // Reference image
     if (refFile) {
       const refB64 = await fileToBase64(refFile);
-      params.reference_image_multiple = [refB64];
-      params.reference_information_extracted_multiple = [parseFloat(document.getElementById('infoExtracted')?.value || 1)];
-      params.reference_strength_multiple = [parseFloat(document.getElementById('refStrength')?.value || 0.6)];
-      setLog('Encoded reference image...');
+      
+      if (currentRefMode === 'precise') {
+        // --- Precise Reference (Director Reference) ---
+        setLog('Resizing reference to 1024x1536...');
+        const resizedB64 = await cropAndResize(refB64, 1024, 1536);
+        
+        const fidelity = parseFloat(document.getElementById('refFidelity')?.value || 0.5);
+        const strength = parseFloat(document.getElementById('refStrength')?.value || 0.6);
+        
+        params.director_reference_images = [resizedB64];
+        params.director_reference_descriptions = [{
+          caption: { base_caption: currentRefType, char_captions: [] },
+          legacy_uc: false,
+        }];
+        params.director_reference_information_extracted = [1.0];
+        params.director_reference_secondary_strength_values = [1 - fidelity];
+        params.director_reference_strength_values = [strength];
+        
+        setLog(`Precise Reference ready (${currentRefType}, str=${strength}, fid=${fidelity})`);
+        
+      } else {
+        // --- Vibe Transfer (Potion) ---
+        const vibeInfo = parseFloat(document.getElementById('vibeInfoExtracted')?.value || 0.7);
+        const vibeStr = parseFloat(document.getElementById('vibeStrength')?.value || 0.6);
+        
+        setLog('Encoding vibe via API...');
+        const encodedVibe = await encodeVibe(token, refB64, vibeInfo, model);
+        
+        params.reference_image_multiple = [encodedVibe];
+        params.reference_information_extracted_multiple = [vibeInfo];
+        params.reference_strength_multiple = [vibeStr];
+        
+        setLog(`Vibe encoded (info=${vibeInfo}, str=${vibeStr})`);
+      }
     }
     
     const body = {
@@ -529,6 +652,9 @@ async function generate() {
     if (debugBody.parameters.image) debugBody.parameters.image = '(base64 ' + body.parameters.image.length + ' chars)';
     if (debugBody.parameters.reference_image_multiple?.length) {
       debugBody.parameters.reference_image_multiple = body.parameters.reference_image_multiple.map(x => '(base64 ' + x.length + ' chars)');
+    }
+    if (debugBody.parameters.director_reference_images?.length) {
+      debugBody.parameters.director_reference_images = body.parameters.director_reference_images.map(x => '(base64 ' + x.length + ' chars)');
     }
     const debugText = JSON.stringify(debugBody, null, 2);
     document.getElementById('debugLog').textContent = debugText;
