@@ -141,7 +141,7 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Reference — 1 shot — v5</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot — v6</div>
     </div>
     <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
   </div>
@@ -556,38 +556,81 @@ async function generate() {
     const buf = await blob.arrayBuffer();
     const bytes = new Uint8Array(buf);
     
-    // Debug response info
-    const first20 = Array.from(bytes.slice(0, 20)).map(b => b.toString(16).padStart(2,'0')).join(' ');
-    const respDebug = `\n\n--- RESPONSE ---\nContent-Type: ${contentType}\nSize: ${bytes.length} bytes\nFirst 20 bytes: ${first20}`;
-    document.getElementById('debugLog').textContent += respDebug;
-    
-    // Try to find PNG in response
-    let pngStart = -1;
-    for (let i = 0; i < bytes.length - 8; i++) {
-      if (bytes[i]===0x89 && bytes[i+1]===0x50 && bytes[i+2]===0x4E && bytes[i+3]===0x47) {
-        pngStart = i; break;
-      }
-    }
+    const first8 = Array.from(bytes.slice(0, 8)).map(b => b.toString(16).padStart(2,'0')).join(' ');
+    document.getElementById('debugLog').textContent += `\n\n--- RESPONSE ---\nContent-Type: ${contentType}\nSize: ${bytes.length} bytes\nFirst 8: ${first8}`;
     
     let pngBlob;
-    if (pngStart >= 0) {
-      // Found PNG, extract it. Find PNG end (IEND chunk)
-      let pngEnd = bytes.length;
-      for (let i = pngStart + 8; i < bytes.length - 8; i++) {
-        if (bytes[i]===0x49 && bytes[i+1]===0x45 && bytes[i+2]===0x4E && bytes[i+3]===0x44) {
-          pngEnd = i + 8; // IEND + 4 byte CRC
-          break;
+    
+    // Response is a zip file (PK header = 50 4b)
+    if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
+      // Parse zip: find local file header, skip to compressed data, inflate
+      // ZIP local file header structure:
+      // 0-3: signature (50 4b 03 04)
+      // 4-5: version
+      // 6-7: flags
+      // 8-9: compression method (08 = deflate)
+      // 10-13: mod time/date
+      // 14-17: crc32
+      // 18-21: compressed size
+      // 22-25: uncompressed size  
+      // 26-27: filename length
+      // 28-29: extra field length
+      // 30+: filename, extra field, then data
+      
+      const fnLen = bytes[26] | (bytes[27] << 8);
+      const exLen = bytes[28] | (bytes[29] << 8);
+      const comprMethod = bytes[8] | (bytes[9] << 8);
+      const comprSize = bytes[18] | (bytes[19] << 8) | (bytes[20] << 16) | (bytes[21] << 24);
+      const dataStart = 30 + fnLen + exLen;
+      
+      document.getElementById('debugLog').textContent += `\nZIP: compression=${comprMethod}, fnLen=${fnLen}, exLen=${exLen}, comprSize=${comprSize}, dataStart=${dataStart}`;
+      
+      if (comprMethod === 8) {
+        // Deflate - use DecompressionStream
+        const compressedData = bytes.slice(dataStart, comprSize > 0 ? dataStart + comprSize : undefined);
+        
+        // Use raw deflate via DecompressionStream('deflate-raw')
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        writer.write(compressedData);
+        writer.close();
+        
+        const reader = ds.readable.getReader();
+        const chunks = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const totalLen = chunks.reduce((a, c) => a + c.length, 0);
+        const result = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const chunk of chunks) {
+          result.set(chunk, offset);
+          offset += chunk.length;
+        }
+        pngBlob = new Blob([result], { type: 'image/png' });
+        document.getElementById('debugLog').textContent += `\nInflated: ${result.length} bytes`;
+      } else if (comprMethod === 0) {
+        // Stored (no compression)
+        const rawData = bytes.slice(dataStart, comprSize > 0 ? dataStart + comprSize : undefined);
+        pngBlob = new Blob([rawData], { type: 'image/png' });
+      } else {
+        throw new Error(`Unknown ZIP compression method: ${comprMethod}`);
+      }
+    } else {
+      // Try as raw PNG or image
+      let pngStart = -1;
+      for (let i = 0; i < bytes.length - 4; i++) {
+        if (bytes[i]===0x89 && bytes[i+1]===0x50 && bytes[i+2]===0x4E && bytes[i+3]===0x47) {
+          pngStart = i; break;
         }
       }
-      pngBlob = new Blob([bytes.slice(pngStart, pngEnd)], { type: 'image/png' });
-    } else if (contentType.includes('image')) {
-      // Response is raw image
-      pngBlob = blob;
-    } else {
-      // Try treating entire response as image anyway
-      const textPreview = new TextDecoder().decode(bytes.slice(0, 200));
-      document.getElementById('debugLog').textContent += `\nText preview: ${textPreview}`;
-      throw new Error('Could not find image in response. See debug log.');
+      if (pngStart >= 0) {
+        pngBlob = new Blob([bytes.slice(pngStart)], { type: 'image/png' });
+      } else {
+        pngBlob = blob;
+      }
     }
     if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
     resultBlobUrl = URL.createObjectURL(pngBlob);
