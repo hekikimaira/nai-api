@@ -141,7 +141,7 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Reference — 1 shot — v4</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot — v5</div>
     </div>
     <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
   </div>
@@ -551,20 +551,44 @@ async function generate() {
     }
     
     setLog('Decoding response...');
+    const contentType = resp.headers.get('content-type') || 'unknown';
     const blob = await resp.blob();
     const buf = await blob.arrayBuffer();
     const bytes = new Uint8Array(buf);
     
-    // Find PNG header in zip response
+    // Debug response info
+    const first20 = Array.from(bytes.slice(0, 20)).map(b => b.toString(16).padStart(2,'0')).join(' ');
+    const respDebug = `\n\n--- RESPONSE ---\nContent-Type: ${contentType}\nSize: ${bytes.length} bytes\nFirst 20 bytes: ${first20}`;
+    document.getElementById('debugLog').textContent += respDebug;
+    
+    // Try to find PNG in response
     let pngStart = -1;
     for (let i = 0; i < bytes.length - 8; i++) {
       if (bytes[i]===0x89 && bytes[i+1]===0x50 && bytes[i+2]===0x4E && bytes[i+3]===0x47) {
         pngStart = i; break;
       }
     }
-    if (pngStart === -1) throw new Error('PNG not found in response');
     
-    const pngBlob = new Blob([bytes.slice(pngStart)], { type: 'image/png' });
+    let pngBlob;
+    if (pngStart >= 0) {
+      // Found PNG, extract it. Find PNG end (IEND chunk)
+      let pngEnd = bytes.length;
+      for (let i = pngStart + 8; i < bytes.length - 8; i++) {
+        if (bytes[i]===0x49 && bytes[i+1]===0x45 && bytes[i+2]===0x4E && bytes[i+3]===0x44) {
+          pngEnd = i + 8; // IEND + 4 byte CRC
+          break;
+        }
+      }
+      pngBlob = new Blob([bytes.slice(pngStart, pngEnd)], { type: 'image/png' });
+    } else if (contentType.includes('image')) {
+      // Response is raw image
+      pngBlob = blob;
+    } else {
+      // Try treating entire response as image anyway
+      const textPreview = new TextDecoder().decode(bytes.slice(0, 200));
+      document.getElementById('debugLog').textContent += `\nText preview: ${textPreview}`;
+      throw new Error('Could not find image in response. See debug log.');
+    }
     if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
     resultBlobUrl = URL.createObjectURL(pngBlob);
     
