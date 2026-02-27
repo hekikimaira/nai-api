@@ -141,7 +141,7 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Reference — 1 shot — v7</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot — v8</div>
     </div>
     <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
   </div>
@@ -343,10 +343,9 @@ function showRefControls(show) {
     el.innerHTML = `
       <div style="margin-bottom:8px;">
         <div class="field-label">Type</div>
-        <div class="ref-type-btns">
-          <button class="ref-type-btn active" data-v="1" onclick="setRefType(this,1)">Character</button>
-          <button class="ref-type-btn" data-v="0" onclick="setRefType(this,0)">Style</button>
-          <button class="ref-type-btn" data-v="2" onclick="setRefType(this,2)">Char+Style</button>
+        <div style="margin-top:8px;">
+          <label style="font-size:12px;color:#94a3b8;">Info Extracted: <span id="infoExtVal">1.0</span></label>
+          <input type="range" id="infoExtracted" min="0.01" max="1" step="0.01" value="1" style="width:100%;" oninput="document.getElementById('infoExtVal').textContent=this.value">
         </div>
       </div>
       <div class="slider-wrap">
@@ -360,12 +359,7 @@ function showRefControls(show) {
   }
 }
 
-let currentRefType = 1;
-function setRefType(btn, val) {
-  currentRefType = val;
-  document.querySelectorAll('.ref-type-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-}
+// Ref type removed - using info extracted slider instead
 
 // --- Drag & Drop ---
 ['i2iZone','refZone'].forEach(id => {
@@ -469,7 +463,11 @@ async function generate() {
       ucPreset: 0,
       qualityToggle: document.getElementById('qualityToggle').checked,
       dynamic_thresholding: false,
-      noise_schedule: 'native',
+      noise_schedule: model.includes('4-5') ? 'native' : 'karras',
+      cfg_rescale: 0,
+      add_original_image: true,
+      sm: false,
+      sm_dyn: false,
       legacy: false,
       legacy_v3_extend: false,
       skip_cfg_above_sigma: null,
@@ -513,7 +511,7 @@ async function generate() {
     if (refFile) {
       const refB64 = await fileToBase64(refFile);
       params.reference_image_multiple = [refB64];
-      params.reference_information_extracted_multiple = [currentRefType];
+      params.reference_information_extracted_multiple = [parseFloat(document.getElementById('infoExtracted')?.value || 1)];
       params.reference_strength_multiple = [parseFloat(document.getElementById('refStrength')?.value || 0.6)];
       setLog('Encoded reference image...');
     }
