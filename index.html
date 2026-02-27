@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NAI Combo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a; color: #e2e8f0; min-height: 100vh;
+    min-height: 100dvh;
+  }
+  
+  .header {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border-bottom: 1px solid #1e293b;
+    padding: 12px 16px;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .header-inner { display: flex; align-items: center; justify-content: space-between; max-width: 600px; margin: 0 auto; }
+  .logo { font-size: 16px; font-weight: 700; color: #6ee7b7; letter-spacing: -0.02em; }
+  .logo-sub { font-size: 10px; color: #64748b; }
+  
+  .btn-gen {
+    background: linear-gradient(135deg, #6ee7b7, #34d399);
+    color: #0f172a; border: none; border-radius: 10px;
+    padding: 10px 24px; font-weight: 700; font-size: 14px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-gen:disabled { background: #334155; opacity: 0.6; cursor: wait; }
+  .btn-gen:active:not(:disabled) { transform: scale(0.96); }
+  
+  .content { max-width: 600px; margin: 0 auto; padding: 12px 16px 80px; }
+  
+  .section {
+    background: #1e293b; border-radius: 12px;
+    padding: 16px; margin-bottom: 12px;
+  }
+  .section-label {
+    font-size: 11px; color: #64748b; text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 8px; font-weight: 600;
+  }
+  
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  
+  .dropzone {
+    border: 2px dashed #475569; border-radius: 12px;
+    padding: 16px; background: #0f172a; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 120px; position: relative;
+    overflow: hidden; transition: all 0.2s; text-align: center;
+  }
+  .dropzone.has-image { border: 2px solid #334155; padding: 0; cursor: default; }
+  .dropzone.dragover { border-color: #6ee7b7; background: #1e293b; }
+  .dropzone img { max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 10px; }
+  .dropzone .icon { font-size: 28px; margin-bottom: 4px; opacity: 0.4; }
+  .dropzone .text { color: #94a3b8; font-size: 12px; line-height: 1.4; }
+  .dropzone .sub { font-size: 10px; opacity: 0.6; }
+  .dropzone .clear-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: #ef4444; color: #fff; border: none;
+    border-radius: 50%; width: 24px; height: 24px;
+    cursor: pointer; font-size: 14px; font-weight: 700; line-height: 24px;
+  }
+  
+  input[type="text"], input[type="password"], input[type="number"], textarea, select {
+    width: 100%; background: #0f172a; border: 1px solid #334155;
+    border-radius: 8px; padding: 8px 12px; color: #e2e8f0;
+    font-size: 13px; outline: none; font-family: inherit;
+  }
+  textarea { resize: vertical; }
+  select { appearance: auto; }
+  
+  .slider-wrap { margin-bottom: 12px; }
+  .slider-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; color: #94a3b8; }
+  .slider-val { color: #e2e8f0; font-family: monospace; }
+  input[type="range"] { width: 100%; accent-color: #6ee7b7; }
+  
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .field-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+  
+  .ref-type-btns { display: flex; gap: 4px; }
+  .ref-type-btn {
+    flex: 1; padding: 6px 4px; font-size: 10px;
+    background: #0f172a; color: #94a3b8;
+    border: 1px solid #334155; border-radius: 6px;
+    cursor: pointer; font-weight: 400; text-align: center;
+  }
+  .ref-type-btn.active { background: #6ee7b7; color: #0f172a; border-color: #6ee7b7; font-weight: 700; }
+  
+  .checkbox-row { display: flex; gap: 16px; margin-top: 4px; }
+  .checkbox-row label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: #94a3b8; cursor: pointer;
+  }
+  .checkbox-row input { accent-color: #6ee7b7; }
+  
+  .error-box {
+    background: #7f1d1d; border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 12px;
+    font-size: 13px; color: #fca5a5; word-break: break-all;
+  }
+  .log-line {
+    font-size: 11px; color: #64748b; margin-bottom: 12px;
+    font-family: monospace; padding: 0 4px;
+  }
+  
+  .result-img { width: 100%; border-radius: 10px; display: block; }
+  .result-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .result-actions a, .result-actions button {
+    flex: 1; text-align: center; padding: 10px;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    cursor: pointer; text-decoration: none; border: none;
+    font-family: inherit;
+  }
+  .btn-save { background: #334155; color: #e2e8f0; }
+  .btn-to-i2i { background: #1e3a5f; color: #93c5fd; border: 1px solid #2563eb !important; }
+  .btn-to-ref { background: #1a332e; color: #6ee7b7; border: 1px solid #059669 !important; }
+  
+  .guide { background: #0c1524; border: 1px solid #1e293b; }
+  .guide .section-label { color: #6ee7b7; }
+  .guide-text { font-size: 12px; color: #64748b; line-height: 1.6; }
+  .guide-text strong { color: #94a3b8; }
+  .guide-text .dim { color: #475569; }
+  
+  .token-row { display: flex; gap: 8px; }
+  .btn-show {
+    background: #334155; border: none; border-radius: 8px;
+    padding: 8px 12px; color: #94a3b8; cursor: pointer; font-size: 12px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div>
+      <div class="logo">NAI Combo</div>
+      <div class="logo-sub">img2img + Precise Reference — 1 shot</div>
+    </div>
+    <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
+  </div>
+</div>
+
+<div class="content">
+  <!-- Token -->
+  <div class="section">
+    <div class="section-label">API Token</div>
+    <div class="token-row">
+      <input type="password" id="token" placeholder="pst-xxxx... (Persistent API Token)">
+      <button class="btn-show" onclick="toggleToken()">Show</button>
+    </div>
+  </div>
+
+  <!-- Image Inputs -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-label">img2img Source (Pose)</div>
+      <div class="dropzone" id="i2iZone" onclick="pickFile('i2i')">
+        <div class="icon">📷</div>
+        <div class="text">Pose / Layout<br><span class="sub">Tap or drop</span></div>
+      </div>
+      <input type="file" id="i2iInput" accept="image/*" style="display:none" onchange="onFilePicked('i2i', this)">
+      <div id="i2iControls" style="display:none; margin-top:12px;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Precise Reference</div>
+      <div class="dropzone" id="refZone" onclick="pickFile('ref')">
+        <div class="icon">📷</div>
+        <div class="text">Character / Style<br><span class="sub">Tap or drop</span></div>
+      </div>
+      <input type="file" id="refInput" accept="image/*" style="display:none" onchange="onFilePicked('ref', this)">
+      <div id="refControls" style="display:none; margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Prompt -->
+  <div class="section">
+    <div class="section-label">Prompt</div>
+    <textarea id="prompt" rows="3" placeholder="1girl, black hair, yellow eyes, horse ears, idol costume, stage, spotlight, cowboy shot, masterpiece, best quality"></textarea>
+    <div class="section-label" style="margin-top:12px;">Negative Prompt</div>
+    <textarea id="negPrompt" rows="2" placeholder="lowres, bad anatomy, worst quality..."></textarea>
+  </div>
+
+  <!-- Settings -->
+  <div class="section">
+    <div class="section-label">Settings</div>
+    <div class="grid-2">
+      <div>
+        <div class="field-label">Model</div>
+        <select id="model">
+          <option value="nai-diffusion-4-5-full" selected>V4.5 Full</option>
+          <option value="nai-diffusion-4-5-curated">V4.5 Curated</option>
+          <option value="nai-diffusion-4-curated-preview">V4 Curated</option>
+          <option value="nai-diffusion-4-full">V4 Full</option>
+        </select>
+      </div>
+      <div>
+        <div class="field-label">Resolution</div>
+        <select id="resolution">
+          <option value="832,1216" selected>Portrait (832×1216)</option>
+          <option value="1216,832">Landscape (1216×832)</option>
+          <option value="1024,1024">Square (1024×1024)</option>
+          <option value="512,768">Small Portrait</option>
+          <option value="768,512">Small Landscape</option>
+          <option value="1024,1536">Large Portrait</option>
+          <option value="1536,1024">Large Landscape</option>
+        </select>
+      </div>
+      <div>
+        <div class="field-label">Sampler</div>
+        <select id="sampler">
+          <option value="k_euler_ancestral" selected>k_euler_ancestral</option>
+          <option value="k_euler">k_euler</option>
+          <option value="k_dpmpp_2s_ancestral">k_dpmpp_2s_ancestral</option>
+          <option value="k_dpmpp_2m">k_dpmpp_2m</option>
+          <option value="k_dpmpp_sde">k_dpmpp_sde</option>
+        </select>
+      </div>
+      <div>
+        <div class="field-label">Seed (0=random)</div>
+        <input type="number" id="seed" value="0">
+      </div>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="slider-header"><span>Steps</span><span class="slider-val" id="stepsVal">28</span></div>
+      <input type="range" id="steps" min="1" max="50" value="28" oninput="document.getElementById('stepsVal').textContent=this.value">
+    </div>
+    <div class="slider-wrap">
+      <div class="slider-header"><span>Prompt Guidance</span><span class="slider-val" id="guidanceVal">5.0</span></div>
+      <input type="range" id="guidance" min="0" max="10" step="0.1" value="5" oninput="document.getElementById('guidanceVal').textContent=parseFloat(this.value).toFixed(1)">
+    </div>
+
+    <div class="checkbox-row">
+      <label><input type="checkbox" id="qualityToggle" checked> Quality Tags</label>
+      <label><input type="checkbox" id="varietyBoost"> Variety+</label>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error-box" style="display:none;"></div>
+  <div id="logLine" class="log-line" style="display:none;"></div>
+
+  <!-- Result -->
+  <div id="resultSection" class="section" style="display:none;">
+    <div class="section-label">Result</div>
+    <img id="resultImg" class="result-img" alt="Generated">
+    <div class="result-actions">
+      <a id="saveLink" class="btn-save" download>Save</a>
+      <button class="btn-to-i2i" onclick="resultToI2i()">→ i2i</button>
+      <button class="btn-to-ref" onclick="resultToRef()">→ Ref</button>
+    </div>
+  </div>
+
+  <!-- Guide -->
+  <div class="section guide">
+    <div class="section-label">使い方</div>
+    <div class="guide-text">
+      <strong>左: img2img</strong> → ポーズ人形/構図参考（空間制御）<br>
+      <strong>右: 精密参照</strong> → キャラ画像（外見制御）<br>
+      <strong>Prompt</strong> → シーン・衣装の補足<br><br>
+      <span class="dim">
+        Strength低め(0.5-0.7)でポーズ保持。高めで自由度UP。<br>
+        Ref Fidelity高いほどキャラ細部まで再現。<br>
+        両方同時に1リクエストで送信。公式UIではできない。
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+// State
+let i2iFile = null, refFile = null;
+let resultBlobUrl = null;
+
+// --- File handling ---
+function pickFile(which) {
+  const zone = document.getElementById(which + 'Zone');
+  if (zone.classList.contains('has-image')) return;
+  document.getElementById(which + 'Input').click();
+}
+
+function onFilePicked(which, input) {
+  const f = input.files?.[0];
+  if (f) setImage(which, f);
+  input.value = '';
+}
+
+function setImage(which, file) {
+  if (which === 'i2i') i2iFile = file; else refFile = file;
+  const zone = document.getElementById(which + 'Zone');
+  const url = URL.createObjectURL(file);
+  zone.innerHTML = `<img src="${url}" alt=""><button class="clear-btn" onclick="event.stopPropagation(); clearImage('${which}')">×</button>`;
+  zone.classList.add('has-image');
+  
+  if (which === 'i2i') showI2iControls(true);
+  if (which === 'ref') showRefControls(true);
+}
+
+function clearImage(which) {
+  if (which === 'i2i') i2iFile = null; else refFile = null;
+  const zone = document.getElementById(which + 'Zone');
+  zone.innerHTML = `<div class="icon">📷</div><div class="text">${which==='i2i'?'Pose / Layout':'Character / Style'}<br><span class="sub">Tap or drop</span></div>`;
+  zone.classList.remove('has-image');
+  
+  if (which === 'i2i') showI2iControls(false);
+  if (which === 'ref') showRefControls(false);
+}
+
+function showI2iControls(show) {
+  const el = document.getElementById('i2iControls');
+  el.style.display = show ? 'block' : 'none';
+  if (show && !el.innerHTML) {
+    el.innerHTML = `
+      <div class="slider-wrap">
+        <div class="slider-header"><span>Strength</span><span class="slider-val" id="strVal">0.60</span></div>
+        <input type="range" id="strength" min="0.01" max="0.99" step="0.01" value="0.60" oninput="document.getElementById('strVal').textContent=parseFloat(this.value).toFixed(2)">
+      </div>
+      <div class="slider-wrap">
+        <div class="slider-header"><span>Noise</span><span class="slider-val" id="noiseVal">0.00</span></div>
+        <input type="range" id="noise" min="0" max="0.99" step="0.01" value="0" oninput="document.getElementById('noiseVal').textContent=parseFloat(this.value).toFixed(2)">
+      </div>`;
+  }
+}
+
+function showRefControls(show) {
+  const el = document.getElementById('refControls');
+  el.style.display = show ? 'block' : 'none';
+  if (show && !el.innerHTML) {
+    el.innerHTML = `
+      <div style="margin-bottom:8px;">
+        <div class="field-label">Type</div>
+        <div class="ref-type-btns">
+          <button class="ref-type-btn active" data-v="1" onclick="setRefType(this,1)">Character</button>
+          <button class="ref-type-btn" data-v="0" onclick="setRefType(this,0)">Style</button>
+          <button class="ref-type-btn" data-v="2" onclick="setRefType(this,2)">Char+Style</button>
+        </div>
+      </div>
+      <div class="slider-wrap">
+        <div class="slider-header"><span>Strength</span><span class="slider-val" id="refStrVal">0.60</span></div>
+        <input type="range" id="refStrength" min="0.01" max="1" step="0.01" value="0.60" oninput="document.getElementById('refStrVal').textContent=parseFloat(this.value).toFixed(2)">
+      </div>
+      <div class="slider-wrap">
+        <div class="slider-header"><span>Fidelity</span><span class="slider-val" id="refFidVal">0.50</span></div>
+        <input type="range" id="refFidelity" min="0" max="1" step="0.01" value="0.50" oninput="document.getElementById('refFidVal').textContent=parseFloat(this.value).toFixed(2)">
+      </div>`;
+  }
+}
+
+let currentRefType = 1;
+function setRefType(btn, val) {
+  currentRefType = val;
+  document.querySelectorAll('.ref-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// --- Drag & Drop ---
+['i2iZone','refZone'].forEach(id => {
+  const el = document.getElementById(id);
+  const which = id.replace('Zone','');
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('dragover');
+    const f = e.dataTransfer?.files?.[0];
+    if (f && f.type.startsWith('image/')) setImage(which, f);
+  });
+});
+
+// --- Token ---
+function toggleToken() {
+  const inp = document.getElementById('token');
+  const btn = inp.nextElementSibling;
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+
+// --- Helpers ---
+function fileToBase64(file) {
+  return new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.readAsDataURL(file);
+  });
+}
+
+function setLog(msg) {
+  const el = document.getElementById('logLine');
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg;
+}
+
+function setError(msg) {
+  const el = document.getElementById('errorBox');
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg;
+}
+
+// --- Generate ---
+async function generate() {
+  const token = document.getElementById('token').value.trim();
+  const prompt = document.getElementById('prompt').value.trim();
+  
+  if (!token) { setError('API token required'); return; }
+  if (!prompt && !refFile) { setError('Prompt or reference image required'); return; }
+  
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  setError(''); setLog('Building request...');
+  document.getElementById('resultSection').style.display = 'none';
+  
+  try {
+    const res = document.getElementById('resolution').value.split(',').map(Number);
+    const [w, h] = res;
+    const action = i2iFile ? 'img2img' : 'generate';
+    const seedVal = parseInt(document.getElementById('seed').value) || 0;
+    const useSeed = seedVal === 0 ? Math.floor(Math.random() * 4294967295) : seedVal;
+    
+    const params = {
+      width: w, height: h,
+      scale: parseFloat(document.getElementById('guidance').value),
+      sampler: document.getElementById('sampler').value,
+      steps: parseInt(document.getElementById('steps').value),
+      seed: useSeed,
+      n_samples: 1,
+      ucPreset: 0,
+      qualityToggle: document.getElementById('qualityToggle').checked,
+      dynamic_thresholding: false,
+      sm: false, sm_dyn: false,
+      noise_schedule: 'native',
+      legacy: false, legacy_v3_extend: false,
+      skip_cfg_above_sigma: null,
+      variety_boost: document.getElementById('varietyBoost').checked,
+      params_version: 3,
+      negative_prompt: document.getElementById('negPrompt').value || 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
+    };
+    
+    if (i2iFile) {
+      params.image = await fileToBase64(i2iFile);
+      params.strength = parseFloat(document.getElementById('strength')?.value || 0.6);
+      params.noise = parseFloat(document.getElementById('noise')?.value || 0);
+      params.extra_noise_seed = useSeed;
+      setLog('Encoded img2img source...');
+    }
+    
+    if (refFile) {
+      const refB64 = await fileToBase64(refFile);
+      params.reference_image_multiple = [refB64];
+      params.reference_information_extracted_multiple = [currentRefType];
+      params.reference_strength_multiple = [parseFloat(document.getElementById('refStrength')?.value || 0.6)];
+      setLog('Encoded reference image...');
+    }
+    
+    const body = {
+      input: prompt || '1girl',
+      model: document.getElementById('model').value,
+      action: action,
+      parameters: params,
+    };
+    
+    setLog(`Sending ${action} request...`);
+    
+    const resp = await fetch('https://image.novelai.net/ai/generate-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`API ${resp.status}: ${errText}`);
+    }
+    
+    setLog('Decoding response...');
+    const blob = await resp.blob();
+    const buf = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    
+    // Find PNG header in zip response
+    let pngStart = -1;
+    for (let i = 0; i < bytes.length - 8; i++) {
+      if (bytes[i]===0x89 && bytes[i+1]===0x50 && bytes[i+2]===0x4E && bytes[i+3]===0x47) {
+        pngStart = i; break;
+      }
+    }
+    if (pngStart === -1) throw new Error('PNG not found in response');
+    
+    const pngBlob = new Blob([bytes.slice(pngStart)], { type: 'image/png' });
+    if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
+    resultBlobUrl = URL.createObjectURL(pngBlob);
+    
+    document.getElementById('resultImg').src = resultBlobUrl;
+    document.getElementById('saveLink').href = resultBlobUrl;
+    document.getElementById('saveLink').download = `nai_${useSeed}.png`;
+    document.getElementById('resultSection').style.display = 'block';
+    document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+    setLog(`Done! Seed: ${useSeed}`);
+    
+  } catch (e) {
+    setError(e.message);
+    setLog('');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate';
+  }
+}
+
+// --- Result reuse ---
+function resultToI2i() {
+  if (!resultBlobUrl) return;
+  fetch(resultBlobUrl).then(r => r.blob()).then(b => {
+    setImage('i2i', new File([b], 'result.png', { type: 'image/png' }));
+  });
+}
+
+function resultToRef() {
+  if (!resultBlobUrl) return;
+  fetch(resultBlobUrl).then(r => r.blob()).then(b => {
+    setImage('ref', new File([b], 'result.png', { type: 'image/png' }));
+  });
+}
+</script>
+</body>
+</html>
