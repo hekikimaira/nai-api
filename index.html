@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>NAI Combo</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
@@ -211,6 +214,13 @@
   }
   .history-item:active { background: #334155; }
   .history-item .h-time { font-size: 9px; color: #475569; }
+  .sync-btn {
+    background: none; border: 1px solid #334155; border-radius: 8px;
+    padding: 4px 10px; font-size: 10px; color: #94a3b8; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+  }
+  .sync-btn.logged-in { border-color: #6ee7b7; color: #6ee7b7; }
+  .sync-status { font-size: 9px; color: #475569; text-align: right; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -219,9 +229,12 @@
   <div class="header-inner">
     <div>
       <div class="logo">NAI Combo</div>
-      <div class="logo-sub">img2img + Precise Ref + Prompt Maker — v9.1</div>
+      <div class="logo-sub">img2img + Precise Ref + Prompt Maker — v9.2</div>
     </div>
-    <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="sync-btn" id="syncBtn" onclick="handleAuth()">ログイン</button>
+      <button class="btn-gen" id="btnGenerate" onclick="generate()">Generate</button>
+    </div>
   </div>
 </div>
 
@@ -395,6 +408,124 @@
 </div>
 
 <script>
+// ===========================
+// Firebase
+// ===========================
+const firebaseConfig = {
+  apiKey: "AIzaSyDBG_r1boPvLrl-wVSIIv-CgCUk0EJrqSw",
+  authDomain: "pmake-e037a.firebaseapp.com",
+  projectId: "pmake-e037a",
+  storageBucket: "pmake-e037a.firebasestorage.app",
+  messagingSenderId: "716873851866",
+  appId: "1:716873851866:web:4a892b109a83de3aec96e3",
+};
+
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+const fbDb = firebase.firestore();
+let fbUser = null;
+let fbSyncDebounce = null;
+
+fbAuth.onAuthStateChanged(async (user) => {
+  fbUser = user;
+  const btn = document.getElementById('syncBtn');
+  if (user) {
+    btn.textContent = user.displayName?.split(' ')[0] || '同期中';
+    btn.classList.add('logged-in');
+    // Pull from Firestore on login
+    await pullFromFirestore();
+  } else {
+    btn.textContent = 'ログイン';
+    btn.classList.remove('logged-in');
+  }
+});
+
+async function handleAuth() {
+  if (fbUser) {
+    if (confirm('ログアウトしますか？')) {
+      await fbAuth.signOut();
+      showToast('ログアウトしました');
+    }
+  } else {
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await fbAuth.signInWithPopup(provider);
+      showToast('ログインしました', 'success');
+    } catch (e) {
+      // Popup blocked on mobile - try redirect
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await fbAuth.signInWithRedirect(provider);
+      } else {
+        showToast('ログインエラー: ' + e.message, 'error');
+      }
+    }
+  }
+}
+
+// Push PM data to Firestore (debounced)
+function syncToFirestore() {
+  if (!fbUser) return;
+  clearTimeout(fbSyncDebounce);
+  fbSyncDebounce = setTimeout(async () => {
+    try {
+      const docRef = fbDb.collection('users').doc(fbUser.uid).collection('nai-combo').doc('promptMaker');
+      await docRef.set({
+        tabs: pmTabs,
+        buttons: pmButtons,
+        history: pmHistory,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.error('Firestore sync error:', e);
+    }
+  }, 2000);
+}
+
+// Pull PM data from Firestore
+async function pullFromFirestore() {
+  if (!fbUser) return;
+  try {
+    const docRef = fbDb.collection('users').doc(fbUser.uid).collection('nai-combo').doc('promptMaker');
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      // First time - push local data up
+      syncToFirestore();
+      showToast('初回同期: ローカルデータをアップロード', 'success');
+      return;
+    }
+
+    const remote = snap.data();
+    const remoteTabs = remote.tabs || [];
+    const remoteButtons = remote.buttons || {};
+    const remoteHistory = remote.history || [];
+
+    // Merge strategy: remote wins if it has more tabs/buttons
+    const localTotal = Object.values(pmButtons).reduce((s, a) => s + a.length, 0);
+    const remoteTotal = Object.values(remoteButtons).reduce((s, a) => s + a.length, 0);
+
+    if (remoteTabs.length > 0 && (remoteTotal >= localTotal || pmTabs.length <= 1)) {
+      pmTabs = remoteTabs;
+      pmButtons = remoteButtons;
+      if (remoteHistory.length > pmHistory.length) pmHistory = remoteHistory;
+      pmActiveTab = pmTabs[0]?.id || 'default';
+
+      // Save to local
+      savePmDataLocal();
+      renderPmTabs();
+      renderPmButtons();
+      showToast('クラウドから同期しました', 'success');
+    } else {
+      // Local has more - push up
+      syncToFirestore();
+      showToast('ローカルデータをアップロード', 'success');
+    }
+  } catch (e) {
+    console.error('Firestore pull error:', e);
+    showToast('同期エラー', 'error');
+  }
+}
+
 // ===========================
 // IndexedDB
 // ===========================
@@ -699,11 +830,11 @@ function importJSON(input) {
 // ===========================
 function saveHistory(text) {
   if (!text) return;
-  // Avoid duplicate of last entry
   if (pmHistory.length > 0 && pmHistory[0].text === text) return;
   pmHistory.unshift({ text, time: new Date().toISOString() });
   if (pmHistory.length > 100) pmHistory.length = 100;
   dbSet('settings', 'pmHistory', pmHistory);
+  syncToFirestore();
 }
 
 function openHistory() {
@@ -736,10 +867,15 @@ function closeHistory() {
 // ===========================
 // Prompt Maker — Save
 // ===========================
-function savePmData() {
+function savePmDataLocal() {
   dbSet('settings', 'pmTabs', pmTabs);
   dbSet('settings', 'pmButtons', pmButtons);
   dbSet('settings', 'pmActiveTab', pmActiveTab);
+}
+
+function savePmData() {
+  savePmDataLocal();
+  syncToFirestore();
 }
 
 // ===========================
